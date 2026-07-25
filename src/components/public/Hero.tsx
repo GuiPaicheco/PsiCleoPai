@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Calendar, User as UserIcon, ShieldCheck, Sparkles, Brain, Award, Clock } from 'lucide-react';
 import AuthModal from '@/components/auth/AuthModal';
 import BookingModal from '@/components/client/BookingModal';
+import { GLSLHills } from '@/components/ui/glsl-hills';
 
 export default function Hero() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -13,6 +14,11 @@ export default function Hero() {
   return (
     <>
       <section className="relative min-h-screen pt-32 pb-20 flex items-center justify-center overflow-hidden bg-[#09090B] bg-grid-pattern">
+        {/* Animated 3D GLSL Hills Background */}
+        <div className="absolute inset-0 z-0 opacity-40 pointer-events-none overflow-hidden">
+          <GLSLHills width="100%" height="100%" speed={0.4} cameraZ={110} />
+        </div>
+
         {/* Ambient Glow Orbs */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#8B5CF6]/15 rounded-full blur-[140px] pointer-events-none animate-pulse-glow" />
         <div className="absolute bottom-10 right-10 w-[350px] h-[350px] bg-[#6D28D9]/10 rounded-full blur-[100px] pointer-events-none" />
