@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, FileText, Save, Brain, CheckCircle2 } from 'lucide-react';
+import { X, Save, Brain } from 'lucide-react';
 import { toast } from 'sonner';
 import { StorageStore } from '@/lib/store';
 
@@ -20,17 +20,19 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
   const [assessment, setAssessment] = useState('');
   const [plan, setPlan] = useState('');
   const [privateNotes, setPrivateNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subjective && !objective) {
       toast.error('Preencha os dados da sessão antes de salvar.');
       return;
     }
 
-    StorageStore.addEvolutionNote({
+    setSaving(true);
+    const ok = await StorageStore.saveEvolution({
       patientId,
       date,
       sessionNumber: Number(sessionNumber),
@@ -40,9 +42,14 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
       plan,
       privateNotes,
     });
+    setSaving(false);
 
-    toast.success(`Evolução clínica da sessão ${sessionNumber} registrada com sucesso!`);
-    onClose();
+    if (ok) {
+      toast.success(`Evolução clínica da sessão ${sessionNumber} salva no banco de dados!`);
+      onClose();
+    } else {
+      toast.error('Erro ao registrar evolução no banco.');
+    }
   };
 
   return (
@@ -99,7 +106,7 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
               rows={2}
               value={subjective}
               onChange={(e) => setSubjective(e.target.value)}
-              placeholder="Ex: Paciente relata melhora na organização diária, mas ainda apresenta episódios de esquecimento de compromissos..."
+              placeholder="Descreva as queixas e relatos trazidos pelo paciente nesta sessão..."
               className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
             />
           </div>
@@ -112,7 +119,7 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
               rows={2}
               value={objective}
               onChange={(e) => setObjective(e.target.value)}
-              placeholder="Ex: Aplicação do Teste de Atenção Sustentada BPA-2. Escore Z = -1.5 em atenção alternada..."
+              placeholder="Testes aplicados, escalas e dados quantitativos/qualitativos observados..."
               className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
             />
           </div>
@@ -125,7 +132,7 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
               rows={2}
               value={assessment}
               onChange={(e) => setAssessment(e.target.value)}
-              placeholder="Ex: Hipótese diagnóstica compativel com perfil desatento. Mantém bom rendimento em raciocínio fluido..."
+              placeholder="Hipótese diagnóstica e raciocínio neuropsicológico..."
               className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
             />
           </div>
@@ -138,7 +145,7 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
               rows={2}
               value={plan}
               onChange={(e) => setPlan(e.target.value)}
-              placeholder="Ex: Aplicação da bateria WISC-IV na próxima semana e orientações de rotina..."
+              placeholder="Próximos passos e orientações para a sessão seguinte..."
               className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
             />
           </div>
@@ -151,17 +158,18 @@ export default function EvolutionModal({ isOpen, onClose, patientId, patientName
               rows={2}
               value={privateNotes}
               onChange={(e) => setPrivateNotes(e.target.value)}
-              placeholder="Observações comportamentais internas, dinâmicas familiares sigilosas..."
+              placeholder="Observações comportamentais internas sigilosas..."
               className="w-full px-4 py-2.5 rounded-xl glass-input text-sm border-rose-500/30"
             />
           </div>
 
           <button
             type="submit"
+            disabled={saving}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] text-white font-semibold text-sm shadow-glow flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
-            Salvar Evolução no Prontuário
+            {saving ? 'Gravando no Prontuário...' : 'Salvar Evolução no Prontuário'}
           </button>
         </form>
       </div>

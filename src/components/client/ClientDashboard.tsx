@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { StorageStore } from '@/lib/store';
 import { Appointment, User } from '@/types';
-import { Calendar, Clock, Download, FileText, Plus, User as UserIcon, CheckCircle2, AlertCircle, RefreshCw, LogOut, ArrowRight, ShieldCheck, MapPin, Video } from 'lucide-react';
+import { Calendar, Clock, Download, FileText, Plus, User as UserIcon, ShieldCheck, MapPin, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import BookingModal from './BookingModal';
 import { generateAppointmentReceiptPDF } from './ReceiptPDF';
@@ -11,20 +11,21 @@ import { generateAppointmentReceiptPDF } from './ReceiptPDF';
 export default function ClientDashboard() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'agendamentos' | 'pagamentos' | 'documentos' | 'perfil'>('agendamentos');
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('todos');
 
-  const loadData = () => {
+  const loadData = async () => {
+    setLoading(true);
     const user = StorageStore.getCurrentUser();
     setCurrentUser(user);
-    const apps = StorageStore.getAppointments();
-    // Filter for current patient if role is cliente
-    if (user && user.role === 'cliente') {
-      setAppointments(apps.filter(a => a.patientId === user.id || a.patientEmail === user.email));
-    } else {
-      setAppointments(apps);
-    }
+    const apps = await StorageStore.fetchAppointments(
+      user.role === 'cliente' ? user.id : undefined,
+      user.role === 'cliente' ? user.email : undefined
+    );
+    setAppointments(apps);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -39,10 +40,13 @@ export default function ClientDashboard() {
     };
   }, []);
 
-  const handleCancelAppointment = (appId: string) => {
+  const handleCancelAppointment = async (appId: string) => {
     if (confirm('Deseja realmente solicitar o cancelamento da consulta?')) {
-      StorageStore.updateAppointmentStatus(appId, 'cancelado');
-      toast.success('Solicitação de cancelamento registrada.');
+      const ok = await StorageStore.updateAppointmentStatus(appId, 'cancelado');
+      if (ok) {
+        toast.success('Solicitação de cancelamento registrada.');
+        loadData();
+      }
     }
   };
 
@@ -196,7 +200,6 @@ export default function ClientDashboard() {
         {/* Tab 1: Appointments List */}
         {activeTab === 'agendamentos' && (
           <div className="space-y-6">
-            {/* Filter pills */}
             <div className="flex items-center gap-2">
               {['todos', 'agendado', 'concluido', 'cancelado'].map(st => (
                 <button
@@ -213,11 +216,21 @@ export default function ClientDashboard() {
               ))}
             </div>
 
-            {filteredAppointments.length === 0 ? (
+            {loading ? (
+              <div className="glass-card rounded-2xl p-12 text-center text-[#B9B9C4]">
+                Carregando agendamentos do banco de dados...
+              </div>
+            ) : filteredAppointments.length === 0 ? (
               <div className="glass-card rounded-2xl p-12 text-center text-[#B9B9C4] space-y-3">
                 <Calendar className="w-12 h-12 text-[#8B5CF6] mx-auto opacity-50" />
                 <h4 className="font-display font-bold text-lg text-white">Nenhum agendamento encontrado</h4>
-                <p className="text-xs">Você não possui consultas com esse filtro no histórico.</p>
+                <p className="text-xs">Você não possui consultas registradas no banco de dados.</p>
+                <button
+                  onClick={() => setIsBookingOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all shadow-glow"
+                >
+                  Realizar Primeiro Agendamento
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
@@ -237,7 +250,7 @@ export default function ClientDashboard() {
                         }`}>
                           {app.status}
                         </span>
-                        <span className="text-xs text-[#B9B9C4]">ID: {app.id}</span>
+                        <span className="text-xs text-[#B9B9C4]">ID: {app.id.slice(0, 8)}</span>
                       </div>
 
                       <h3 className="font-display text-lg font-bold text-white">{app.serviceTitle}</h3>
@@ -290,37 +303,41 @@ export default function ClientDashboard() {
               <h3 className="font-display text-lg font-bold text-white mb-4">
                 Histórico Financeiro & Emissão de Recibos
               </h3>
-              <div className="space-y-3">
-                {appointments.map((app) => (
-                  <div
-                    key={app.id}
-                    className="p-4 rounded-xl bg-[#09090B] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div>
-                      <h4 className="text-sm font-bold text-white">{app.serviceTitle}</h4>
-                      <p className="text-xs text-[#B9B9C4]">Data: {app.date} • Valor: R$ {app.price.toFixed(2)}</p>
-                    </div>
+              {appointments.length === 0 ? (
+                <p className="text-xs text-[#B9B9C4]">Nenhum histórico de pagamento registrado.</p>
+              ) : (
+                <div className="space-y-3">
+                  {appointments.map((app) => (
+                    <div
+                      key={app.id}
+                      className="p-4 rounded-xl bg-[#09090B] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{app.serviceTitle}</h4>
+                        <p className="text-xs text-[#B9B9C4]">Data: {app.date} • Valor: R$ {app.price.toFixed(2)}</p>
+                      </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        app.paymentStatus === 'pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        {app.paymentStatus === 'pago' ? 'PAGO VIA PIX' : 'PENDENTE'}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          app.paymentStatus === 'pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                        }`}>
+                          {app.paymentStatus === 'pago' ? 'PAGO VIA PIX' : 'PENDENTE'}
+                        </span>
 
-                      {app.paymentStatus === 'pago' && (
-                        <button
-                          onClick={() => generateAppointmentReceiptPDF(app)}
-                          className="px-3 py-1.5 rounded-lg bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all flex items-center gap-1 shadow-glow"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          Baixar PDF
-                        </button>
-                      )}
+                        {app.paymentStatus === 'pago' && (
+                          <button
+                            onClick={() => generateAppointmentReceiptPDF(app)}
+                            className="px-3 py-1.5 rounded-lg bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all flex items-center gap-1 shadow-glow"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Baixar PDF
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -348,7 +365,7 @@ export default function ClientDashboard() {
 
                 <div className="p-4 rounded-xl bg-[#09090B] border border-white/10 flex items-start justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white">Formulário de Anamnese Inicial (Preenchimento)</h4>
+                    <h4 className="text-sm font-bold text-white">Formulário de Anamnese Inicial</h4>
                     <p className="text-xs text-[#B9B9C4] mt-1">Questionário de histórico do desenvolvimento e rotina.</p>
                   </div>
                   <button
@@ -383,15 +400,6 @@ export default function ClientDashboard() {
                   type="email"
                   readOnly
                   value={currentUser?.email || ''}
-                  className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-[#B9B9C4] mb-1">CPF (para Emissão de Recibos)</label>
-                <input
-                  type="text"
-                  readOnly
-                  value={currentUser?.cpf || '345.678.901-22'}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
                 />
               </div>

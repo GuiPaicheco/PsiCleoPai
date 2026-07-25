@@ -15,7 +15,9 @@ export type ServiceType =
   | 'avaliacao_neuropsicologica'
   | 'reabilitacao_cognitiva'
   | 'psicoterapia_cognitivo_comportamental'
+  | 'psicoterapia_tcc'
   | 'orientacao_parental'
+  | 'desenvolvimento_infantil'
   | 'investigacao_tdah_autismo';
 
 export interface ServiceItem {
@@ -68,6 +70,7 @@ export interface PatientRecord {
 export interface SessionEvolutionNote {
   id: string;
   patientId: string;
+  patientName?: string;
   appointmentId?: string;
   date: string;
   sessionNumber: number;

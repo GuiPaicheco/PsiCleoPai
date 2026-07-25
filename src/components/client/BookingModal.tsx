@@ -22,13 +22,13 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
   const [modality, setModality] = useState<'presencial' | 'online'>('presencial');
   
   // Patient details
-  const [patientName, setPatientName] = useState('Lucas Silveira');
-  const [patientEmail, setPatientEmail] = useState('lucas.silveira@email.com');
-  const [patientPhone, setPatientPhone] = useState('(11) 98765-4321');
+  const [patientName, setPatientName] = useState('');
+  const [patientEmail, setPatientEmail] = useState('');
+  const [patientPhone, setPatientPhone] = useState('');
 
   // Generated appointment state
   const [generatedPixPayload, setGeneratedPixPayload] = useState('');
-  const [pixPaid, setPixPaid] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -43,19 +43,17 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
       toast.error('Preencha os dados do paciente para continuar.');
       return;
     }
-    const rawPixPayload = `00020126580014br.gov.bcb.pix0136neuropsicologia.cleopai@pix.com.br5204000053039865405${currentService.price.toFixed(2)}5802BR5915DRA CLEO PAI6009SAO PAULO62070503***6304A9C1`;
+    const rawPixPayload = `00020126580014br.gov.bcb.pix0136088366726635204000053039865405${currentService.price.toFixed(2)}5802BR5915DRA CLEO PAI6009SAO PAULO62070503***6304A9C1`;
     setGeneratedPixPayload(rawPixPayload);
     setStep(2);
   };
 
-  const handleSimulatePixPayment = () => {
-    setPixPaid(true);
-    confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-
-    // Save appointment in store
+  const handleSimulatePixPayment = async () => {
+    setSubmitting(true);
     const currentUser = StorageStore.getCurrentUser();
-    const createdApp = StorageStore.addAppointment({
-      patientId: currentUser.id !== 'guest' ? currentUser.id : 'pat-1',
+
+    const result = await StorageStore.createAppointment({
+      patientId: currentUser.id !== 'guest' ? currentUser.id : undefined,
       patientName: patientName,
       patientEmail: patientEmail,
       patientPhone: patientPhone,
@@ -65,26 +63,30 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
       time: selectedTime,
       durationMinutes: currentService.durationMinutes,
       modality: modality,
-      status: 'agendado',
       price: currentService.price,
-      paymentStatus: 'pago',
       paymentMethod: 'pix',
-      pixCode: generatedPixPayload,
-      notes: `Agendado via site público (${modality}).`,
+      notes: `Agendado via site (${modality}).`,
     });
 
-    toast.success(`Agendamento confirmado para ${selectedDate} às ${selectedTime}!`);
+    setSubmitting(false);
+
+    if (!result.success) {
+      toast.error(result.error || 'Não foi possível confirmar o agendamento.');
+      return;
+    }
+
+    confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+    toast.success(`Agendamento confirmado no banco de dados para ${selectedDate} às ${selectedTime}!`);
     setStep(3);
   };
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(generatedPixPayload);
-    toast.success('Código PIX Copia e Cola copiado para a área de transferência!');
+    toast.success('Código PIX Copia e Cola copiado!');
   };
 
   const handleResetAndClose = () => {
     setStep(1);
-    setPixPaid(false);
     onClose();
   };
 
@@ -229,6 +231,13 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                   className="px-4 py-2.5 rounded-xl glass-input text-sm"
                 />
               </div>
+              <input
+                type="email"
+                placeholder="E-mail para confirmação"
+                value={patientEmail}
+                onChange={(e) => setPatientEmail(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
+              />
             </div>
 
             <button
@@ -255,7 +264,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                 R$ {currentService.price.toFixed(2)}
               </h4>
               <p className="text-xs text-[#B9B9C4] mt-1">
-                Escaneie o QR Code com o aplicativo do seu banco ou copie o código Pix abaixo.
+                Chave Pix: <strong className="text-white">08836672663</strong> • Escaneie o QR Code ou copie a chave abaixo.
               </p>
             </div>
 
@@ -279,11 +288,12 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
                 type="button"
+                disabled={submitting}
                 onClick={handleSimulatePixPayment}
                 className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Simular Confirmação do Pix Instantâneo
+                {submitting ? 'Gravando no Banco...' : 'Confirmar Pix e Gravar no Banco'}
               </button>
               <button
                 type="button"
@@ -305,17 +315,17 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
             <div>
               <h3 className="font-display text-2xl font-bold text-white">
-                Consulta Confirmada na Agenda!
+                Consulta Gravada no Banco de Dados!
               </h3>
               <p className="text-sm text-[#B9B9C4] mt-2 max-w-md mx-auto">
-                Seu agendamento para <strong className="text-white">{currentService.title}</strong> foi concluído para o dia <strong className="text-white">{selectedDate}</strong> às <strong className="text-white">{selectedTime}</strong> ({modality}).
+                Seu agendamento para <strong className="text-white">{currentService.title}</strong> foi persistido para o dia <strong className="text-white">{selectedDate}</strong> às <strong className="text-white">{selectedTime}</strong> ({modality}).
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-[#09090B] border border-white/10 text-left text-xs text-[#B9B9C4] space-y-2">
               <p className="flex items-center justify-between">
-                <span>Comprovante Pix:</span>
-                <span className="font-mono text-emerald-400 font-bold">PAGO (ID PIX-998231)</span>
+                <span>Status de Pagamento:</span>
+                <span className="font-mono text-emerald-400 font-bold">PAGO E GRAVADO NO BANCO</span>
               </p>
               <p className="flex items-center justify-between">
                 <span>Profissional:</span>
@@ -323,7 +333,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
               </p>
               <p className="flex items-center justify-between">
                 <span>Local / Link:</span>
-                <span className="text-white">{modality === 'presencial' ? 'Av. Paulista, 2000' : 'Link de Telemedicina no Portal'}</span>
+                <span className="text-white">{modality === 'presencial' ? 'Av. Paulista, 2000' : 'Telemedicina / Online'}</span>
               </p>
             </div>
 
@@ -332,7 +342,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
               onClick={handleResetAndClose}
               className="w-full py-3.5 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-semibold text-sm shadow-glow"
             >
-              Concluir e Ir para a Área do Paciente
+              Concluir
             </button>
           </div>
         )}

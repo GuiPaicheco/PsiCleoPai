@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Lock, Save, Calendar, Clock } from 'lucide-react';
+import { X, Lock, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { StorageStore } from '@/lib/store';
 
@@ -14,32 +14,22 @@ export default function LockSlotModal({ isOpen, onClose }: LockSlotModalProps) {
   const [date, setDate] = useState('2026-07-28');
   const [time, setTime] = useState('12:00');
   const [reason, setReason] = useState('Pausa para Almoço / Reunião Clínica');
+  const [saving, setSaving] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Add dummy locked appointment slot in store
-    StorageStore.addAppointment({
-      patientId: 'pro-lock',
-      patientName: '🔒 HORÁRIO BLOQUEADO',
-      patientEmail: '',
-      patientPhone: '',
-      serviceId: 'avaliacao_neuropsicologica',
-      serviceTitle: `BLOQUEIO: ${reason}`,
-      date,
-      time,
-      durationMinutes: 60,
-      modality: 'presencial',
-      status: 'cancelado',
-      price: 0,
-      paymentStatus: 'pago',
-      notes: reason,
-    });
+    setSaving(true);
+    const ok = await StorageStore.lockSlot(date, time, reason);
+    setSaving(false);
 
-    toast.success(`Horário ${date} às ${time} bloqueado na agenda!`);
-    onClose();
+    if (ok) {
+      toast.success(`Horário ${date} às ${time} bloqueado no banco de dados!`);
+      onClose();
+    } else {
+      toast.error('Erro ao bloquear horário no banco de dados.');
+    }
   };
 
   return (
@@ -99,10 +89,11 @@ export default function LockSlotModal({ isOpen, onClose }: LockSlotModalProps) {
 
           <button
             type="submit"
+            disabled={saving}
             className="w-full py-3.5 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-semibold text-sm shadow-glow flex items-center justify-center gap-2"
           >
             <Lock className="w-4 h-4" />
-            Confirmar Bloqueio
+            {saving ? 'Gravando Bloqueio...' : 'Confirmar Bloqueio no Banco'}
           </button>
         </form>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, UserPlus, Save, CheckCircle2 } from 'lucide-react';
+import { X, UserPlus, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { StorageStore } from '@/lib/store';
 import { PatientRecord } from '@/types';
@@ -23,47 +23,39 @@ export default function PatientModal({ isOpen, onClose, patientToEdit }: Patient
   const [emergencyContact, setEmergencyContact] = useState(patientToEdit?.emergencyContact || '');
   const [clinicalNotesSummary, setClinicalNotesSummary] = useState(patientToEdit?.clinicalNotesSummary || '');
   const [status, setStatus] = useState<'ativo' | 'em_avaliacao' | 'alta' | 'inativo'>(patientToEdit?.status || 'em_avaliacao');
+  const [saving, setSaving] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !phone) {
       toast.error('Preencha pelo menos o Nome Completo e o Telefone.');
       return;
     }
 
-    if (patientToEdit) {
-      StorageStore.updatePatient(patientToEdit.id, {
-        fullName,
-        socialName,
-        email,
-        phone,
-        cpf,
-        birthDate,
-        occupation,
-        emergencyContact,
-        clinicalNotesSummary,
-        status,
-      });
-      toast.success('Cadastro do paciente atualizado!');
-    } else {
-      StorageStore.addPatient({
-        fullName,
-        socialName,
-        email,
-        phone,
-        cpf,
-        birthDate,
-        occupation,
-        emergencyContact,
-        clinicalNotesSummary,
-        status,
-      });
-      toast.success('Novo paciente cadastrado no CRM clínico!');
-    }
+    setSaving(true);
+    const result = await StorageStore.savePatient({
+      ...(patientToEdit ? { id: patientToEdit.id } : {}),
+      fullName,
+      socialName,
+      email,
+      phone,
+      cpf,
+      birthDate,
+      occupation,
+      emergencyContact,
+      clinicalNotesSummary,
+      status,
+    });
+    setSaving(false);
 
-    onClose();
+    if (result) {
+      toast.success(patientToEdit ? 'Prontuário atualizado no banco de dados!' : 'Paciente cadastrado com sucesso!');
+      onClose();
+    } else {
+      toast.error('Erro ao salvar paciente no banco de dados.');
+    }
   };
 
   return (
@@ -78,7 +70,7 @@ export default function PatientModal({ isOpen, onClose, patientToEdit }: Patient
               <h3 className="font-display text-xl font-bold text-white">
                 {patientToEdit ? 'Editar Prontuário do Paciente' : 'Novo Paciente Clínico'}
               </h3>
-              <p className="text-xs text-[#B9B9C4]">Cadastro completo e histórico sigiloso</p>
+              <p className="text-xs text-[#B9B9C4]">Persistência real no banco relacional SQL</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-[#B9B9C4] hover:text-white rounded-xl hover:bg-white/5">
@@ -172,7 +164,7 @@ export default function PatientModal({ isOpen, onClose, patientToEdit }: Patient
               type="text"
               value={emergencyContact}
               onChange={(e) => setEmergencyContact(e.target.value)}
-              placeholder="Ex: Mariana (Esposa) - (11) 98888-7777"
+              placeholder="Ex: Nome (Grau de Parente) - (11) 99999-0000"
               className="w-full px-4 py-2.5 rounded-xl glass-input text-sm"
             />
           </div>
@@ -204,10 +196,11 @@ export default function PatientModal({ isOpen, onClose, patientToEdit }: Patient
 
           <button
             type="submit"
+            disabled={saving}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] text-white font-semibold text-sm shadow-glow flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
-            Salvar Registro do Paciente
+            {saving ? 'Gravando no Banco de Dados...' : 'Salvar Registro do Paciente'}
           </button>
         </form>
       </div>

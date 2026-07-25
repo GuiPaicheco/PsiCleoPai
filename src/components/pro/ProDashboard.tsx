@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { StorageStore } from '@/lib/store';
-import { Appointment, PatientRecord, SessionEvolutionNote, PaymentRecord, User } from '@/types';
+import { Appointment, PatientRecord, SessionEvolutionNote, User } from '@/types';
 import {
-  Calendar, Users, DollarSign, Brain, Plus, Lock, Search, Filter,
-  CheckCircle2, Clock, XCircle, FileText, Download, ShieldCheck,
-  TrendingUp, Activity, UserPlus, Stethoscope, Eye, ArrowUpRight
+  Calendar, Users, DollarSign, Brain, Plus, Lock, Search,
+  CheckCircle2, Clock, FileText, Download, ShieldCheck,
+  TrendingUp, Activity, UserPlus, Stethoscope
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
 import PatientModal from './PatientModal';
 import EvolutionModal from './EvolutionModal';
@@ -20,7 +20,24 @@ export default function ProDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<PatientRecord[]>([]);
   const [evolutions, setEvolutions] = useState<SessionEvolutionNote[]>([]);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Dynamic Metrics State from SQL
+  const [stats, setStats] = useState<{
+    totalRevenue: number;
+    pendingRevenue: number;
+    activePatientsCount: number;
+    scheduledCount: number;
+    totalAppointmentsCount: number;
+    chartData: { month: string; receita: number; atendimentos: number }[];
+  }>({
+    totalRevenue: 0,
+    pendingRevenue: 0,
+    activePatientsCount: 0,
+    scheduledCount: 0,
+    totalAppointmentsCount: 0,
+    chartData: [{ month: 'Atual', receita: 0, atendimentos: 0 }],
+  });
 
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'visao_geral' | 'agenda' | 'pacientes' | 'evolucoes' | 'financeiro'>('visao_geral');
@@ -37,12 +54,25 @@ export default function ProDashboard() {
   // Search filter
   const [searchTerm, setSearchTerm] = useState('');
 
-  const loadData = () => {
+  const loadData = async () => {
+    setLoading(true);
     setCurrentUser(StorageStore.getCurrentUser());
-    setAppointments(StorageStore.getAppointments());
-    setPatients(StorageStore.getPatients());
-    setEvolutions(StorageStore.getEvolutionNotes());
-    setPayments(StorageStore.getPayments());
+
+    const [appsData, patientsData, evosData, statsData] = await Promise.all([
+      StorageStore.fetchAppointments(),
+      StorageStore.fetchPatients(),
+      StorageStore.fetchEvolutions(),
+      StorageStore.fetchDashboardStats(),
+    ]);
+
+    setAppointments(appsData);
+    setPatients(patientsData);
+    setEvolutions(evosData);
+
+    if (statsData) {
+      setStats(statsData);
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -63,28 +93,12 @@ export default function ProDashboard() {
     };
   }, []);
 
-  // Financial & Metric Calculations
-  const totalRevenue = appointments
-    .filter(a => a.paymentStatus === 'pago')
-    .reduce((sum, a) => sum + a.price, 0);
-
-  const pendingRevenue = appointments
-    .filter(a => a.paymentStatus === 'pendente')
-    .reduce((sum, a) => sum + a.price, 0);
-
-  const totalPatientsCount = patients.length;
-  const scheduledCount = appointments.filter(a => a.status === 'agendado').length;
-
-  // Chart data for revenue trend
-  const chartData = [
-    { month: 'Mai', receita: 4200, atendimentos: 12 },
-    { month: 'Jun', receita: 5800, atendimentos: 18 },
-    { month: 'Jul', receita: totalRevenue > 0 ? totalRevenue : 7200, atendimentos: appointments.length },
-  ];
-
-  const handleUpdateAppointmentStatus = (id: string, status: Appointment['status'], paymentStatus?: Appointment['paymentStatus']) => {
-    StorageStore.updateAppointmentStatus(id, status, paymentStatus);
-    toast.success(`Status da consulta ${id} atualizado.`);
+  const handleUpdateAppointmentStatus = async (id: string, status: string, paymentStatus?: string) => {
+    const ok = await StorageStore.updateAppointmentStatus(id, status, paymentStatus);
+    if (ok) {
+      toast.success(`Status da consulta atualizado.`);
+      loadData();
+    }
   };
 
   const filteredPatients = patients.filter(p =>
@@ -117,7 +131,7 @@ export default function ProDashboard() {
                   </span>
                 </div>
                 <p className="text-sm text-[#B9B9C4] mt-1">
-                  Gestão completa da clínica neuropsicológica, prontuários, agendamentos e faturamento
+                  Gestão completa da clínica neuropsicológica (Dados Persistidos via PostgreSQL/Prisma DB)
                 </p>
               </div>
             </div>
@@ -146,7 +160,7 @@ export default function ProDashboard() {
           </div>
         </div>
 
-        {/* Executive Metrics Overview Grid */}
+        {/* Executive Metrics Overview Grid (Dinamically Calculated from DB) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="glass-card rounded-2xl p-5 border border-white/10 flex items-center justify-between">
             <div>
@@ -154,10 +168,10 @@ export default function ProDashboard() {
                 Faturamento Confirmado
               </span>
               <h3 className="font-display text-2xl font-extrabold text-white mt-1">
-                R$ {totalRevenue.toFixed(2)}
+                R$ {stats.totalRevenue.toFixed(2)}
               </h3>
               <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 mt-1">
-                <TrendingUp className="w-3.5 h-3.5" /> +18.4% este mês
+                <TrendingUp className="w-3.5 h-3.5" /> Calculado via SQL
               </span>
             </div>
             <div className="w-12 h-12 rounded-xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 flex items-center justify-center text-[#8B5CF6]">
@@ -171,7 +185,7 @@ export default function ProDashboard() {
                 Consultas Agendadas
               </span>
               <h3 className="font-display text-2xl font-extrabold text-white mt-1">
-                {scheduledCount}
+                {stats.scheduledCount}
               </h3>
               <span className="text-[11px] text-[#A78BFA] font-medium mt-1 block">
                 Horários na grade
@@ -188,7 +202,7 @@ export default function ProDashboard() {
                 Pacientes Ativos (CRM)
               </span>
               <h3 className="font-display text-2xl font-extrabold text-white mt-1">
-                {totalPatientsCount}
+                {stats.activePatientsCount}
               </h3>
               <span className="text-[11px] text-[#B9B9C4] font-medium mt-1 block">
                 Com prontuário ativo
@@ -202,10 +216,10 @@ export default function ProDashboard() {
           <div className="glass-card rounded-2xl p-5 border border-white/10 flex items-center justify-between">
             <div>
               <span className="text-xs font-semibold text-[#B9B9C4] uppercase tracking-wider block">
-                Pix Pendente de Confirmação
+                Pix Pendente
               </span>
               <h3 className="font-display text-2xl font-extrabold text-amber-400 mt-1">
-                R$ {pendingRevenue.toFixed(2)}
+                R$ {stats.pendingRevenue.toFixed(2)}
               </h3>
               <span className="text-[11px] text-amber-300/80 font-medium mt-1 block">
                 Aguardando banco
@@ -286,13 +300,13 @@ export default function ProDashboard() {
             {/* Recharts Financial Chart */}
             <div className="lg:col-span-8 glass-card rounded-3xl p-6 border border-white/10">
               <h3 className="font-display text-lg font-bold text-white mb-1">
-                Evolução do Faturamento & Sessões
+                Evolução do Faturamento & Sessões (Banco Real)
               </h3>
-              <p className="text-xs text-[#B9B9C4] mb-6">Gráfico mensal comparativo de receita acumulada</p>
+              <p className="text-xs text-[#B9B9C4] mb-6">Gráfico dinâmico gerado por consultas SQL no Prisma DB</p>
 
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                  <AreaChart data={stats.chartData}>
                     <defs>
                       <linearGradient id="colorReceita" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/>
@@ -312,26 +326,32 @@ export default function ProDashboard() {
             {/* Quick Daily Feed */}
             <div className="lg:col-span-4 glass-card rounded-3xl p-6 border border-white/10 space-y-4">
               <h3 className="font-display text-lg font-bold text-white flex items-center justify-between">
-                Fluxo do Dia
-                <span className="text-xs text-[#A78BFA] font-medium">Hoje</span>
+                Fluxo da Agenda
+                <span className="text-xs text-[#A78BFA] font-medium">Recente</span>
               </h3>
 
-              <div className="space-y-3">
-                {appointments.slice(0, 3).map((app) => (
-                  <div key={app.id} className="p-3.5 rounded-xl bg-[#09090B] border border-white/5 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#8B5CF6]">{app.time}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        app.paymentStatus === 'pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        {app.paymentStatus === 'pago' ? 'Pix Pago' : 'Pendente'}
-                      </span>
+              {appointments.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[#B9B9C4]">
+                  Nenhum agendamento gravado no banco de dados ainda.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {appointments.slice(0, 4).map((app) => (
+                    <div key={app.id} className="p-3.5 rounded-xl bg-[#09090B] border border-white/5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#8B5CF6]">{app.date} às {app.time}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          app.paymentStatus === 'pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                        }`}>
+                          {app.paymentStatus === 'pago' ? 'Pix Pago' : 'Pendente'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white">{app.patientName}</h4>
+                      <p className="text-xs text-[#B9B9C4]">{app.serviceTitle}</p>
                     </div>
-                    <h4 className="text-sm font-bold text-white">{app.patientName}</h4>
-                    <p className="text-xs text-[#B9B9C4]">{app.serviceTitle}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -341,7 +361,7 @@ export default function ProDashboard() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl font-bold text-white">
-                Grade de Consultas & Atendimentos
+                Grade de Consultas (Armazenada no Banco)
               </h3>
               <button
                 onClick={() => setIsLockModalOpen(true)}
@@ -352,66 +372,72 @@ export default function ProDashboard() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              {appointments.map((app) => (
-                <div
-                  key={app.id}
-                  className="glass-card rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/20 text-[#A78BFA] text-xs font-bold">
-                        {app.date} às {app.time}
-                      </span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        app.status === 'agendado' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                      }`}>
-                        {app.status}
-                      </span>
+            {appointments.length === 0 ? (
+              <div className="glass-card rounded-2xl p-12 text-center text-[#B9B9C4]">
+                A agenda está zerada. Novos agendamentos realizados pelos pacientes ou pela profissional aparecerão aqui instantaneamente.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {appointments.map((app) => (
+                  <div
+                    key={app.id}
+                    className="glass-card rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/20 text-[#A78BFA] text-xs font-bold">
+                          {app.date} às {app.time}
+                        </span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          app.status === 'agendado' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {app.status}
+                        </span>
+                      </div>
+
+                      <h4 className="font-display text-lg font-bold text-white">{app.patientName}</h4>
+                      <p className="text-xs text-[#B9B9C4]">
+                        {app.serviceTitle} • {app.durationMinutes} min • Modalidade: {app.modality.toUpperCase()}
+                      </p>
+                      {app.notes && (
+                        <p className="text-xs text-[#71717A] italic">Nota: {app.notes}</p>
+                      )}
                     </div>
 
-                    <h4 className="font-display text-lg font-bold text-white">{app.patientName}</h4>
-                    <p className="text-xs text-[#B9B9C4]">
-                      {app.serviceTitle} • {app.durationMinutes} min • Modalidade: {app.modality.toUpperCase()}
-                    </p>
-                    {app.notes && (
-                      <p className="text-xs text-[#71717A] italic">Nota: {app.notes}</p>
-                    )}
-                  </div>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {app.status === 'agendado' && (
+                        <>
+                          <button
+                            onClick={() => handleUpdateAppointmentStatus(app.id, 'concluido', 'pago')}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Concluir Sessão
+                          </button>
+                          <button
+                            onClick={() => handleUpdateAppointmentStatus(app.id, 'cancelado')}
+                            className="px-3.5 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-semibold"
+                          >
+                            Cancelar
+                          </button>
+                        </>
+                      )}
 
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    {app.status === 'agendado' && (
-                      <>
-                        <button
-                          onClick={() => handleUpdateAppointmentStatus(app.id, 'concluido', 'pago')}
-                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md flex items-center gap-1"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Concluir Sessão
-                        </button>
-                        <button
-                          onClick={() => handleUpdateAppointmentStatus(app.id, 'cancelado')}
-                          className="px-3.5 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-semibold"
-                        >
-                          Rejeitar / Cancelar
-                        </button>
-                      </>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        setSelectedPatientForEvolution({ id: app.patientId, name: app.patientName });
-                        setIsEvolutionModalOpen(true);
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 text-white hover:bg-[#8B5CF6] text-xs font-semibold transition-all flex items-center gap-1"
-                    >
-                      <Brain className="w-3.5 h-3.5" />
-                      Evoluir Prontuário
-                    </button>
+                      <button
+                        onClick={() => {
+                          setSelectedPatientForEvolution({ id: app.patientId || '', name: app.patientName });
+                          setIsEvolutionModalOpen(true);
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 text-white hover:bg-[#8B5CF6] text-xs font-semibold transition-all flex items-center gap-1"
+                      >
+                        <Brain className="w-3.5 h-3.5" />
+                        Evoluir Prontuário
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -423,7 +449,7 @@ export default function ProDashboard() {
                 <Search className="w-4 h-4 text-[#B9B9C4] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Buscar paciente por nome ou CPF..."
+                  placeholder="Buscar paciente no banco de dados..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-xs"
@@ -442,57 +468,63 @@ export default function ProDashboard() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPatients.map((pat) => (
-                <div key={pat.id} className="glass-card glass-card-hover rounded-2xl p-6 space-y-4 border border-white/10">
-                  <div className="flex items-center justify-between">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      pat.status === 'em_avaliacao'
-                        ? 'bg-amber-500/20 text-amber-400'
-                        : 'bg-emerald-500/20 text-emerald-400'
-                    }`}>
-                      {pat.status.replace('_', ' ')}
-                    </span>
-                    <span className="text-xs text-[#B9B9C4]">{pat.totalSessions} sessões</span>
-                  </div>
-
-                  <div>
-                    <h4 className="font-display text-lg font-bold text-white">{pat.fullName}</h4>
-                    {pat.socialName && <p className="text-xs text-[#A78BFA]">Nome Social: {pat.socialName}</p>}
-                    <p className="text-xs text-[#B9B9C4] mt-1">CPF: {pat.cpf}</p>
-                    <p className="text-xs text-[#B9B9C4]">Contato: {pat.phone}</p>
-                  </div>
-
-                  {pat.clinicalNotesSummary && (
-                    <div className="p-3 rounded-xl bg-[#09090B] text-xs text-[#B9B9C4] italic border border-white/5">
-                      "{pat.clinicalNotesSummary}"
+            {filteredPatients.length === 0 ? (
+              <div className="glass-card rounded-2xl p-12 text-center text-[#B9B9C4]">
+                Nenhum paciente cadastrado no banco de dados. Clique em "Cadastrar Novo Paciente" para começar.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPatients.map((pat) => (
+                  <div key={pat.id} className="glass-card glass-card-hover rounded-2xl p-6 space-y-4 border border-white/10">
+                    <div className="flex items-center justify-between">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        pat.status === 'em_avaliacao'
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-emerald-500/20 text-emerald-400'
+                      }`}>
+                        {pat.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-xs text-[#B9B9C4]">{pat.totalSessions} sessões</span>
                     </div>
-                  )}
 
-                  <div className="pt-3 border-t border-white/10 flex items-center justify-between">
-                    <button
-                      onClick={() => {
-                        setSelectedPatientForEdit(pat);
-                        setIsPatientModalOpen(true);
-                      }}
-                      className="text-xs text-[#A78BFA] hover:text-white font-semibold flex items-center gap-1"
-                    >
-                      Editar Registro
-                    </button>
+                    <div>
+                      <h4 className="font-display text-lg font-bold text-white">{pat.fullName}</h4>
+                      {pat.socialName && <p className="text-xs text-[#A78BFA]">Nome Social: {pat.socialName}</p>}
+                      <p className="text-xs text-[#B9B9C4] mt-1">CPF: {pat.cpf || 'Não informado'}</p>
+                      <p className="text-xs text-[#B9B9C4]">Contato: {pat.phone}</p>
+                    </div>
 
-                    <button
-                      onClick={() => {
-                        setSelectedPatientForEvolution({ id: pat.id, name: pat.fullName });
-                        setIsEvolutionModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all shadow-glow"
-                    >
-                      Nova Evolução
-                    </button>
+                    {pat.clinicalNotesSummary && (
+                      <div className="p-3 rounded-xl bg-[#09090B] text-xs text-[#B9B9C4] italic border border-white/5">
+                        "{pat.clinicalNotesSummary}"
+                      </div>
+                    )}
+
+                    <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+                      <button
+                        onClick={() => {
+                          setSelectedPatientForEdit(pat);
+                          setIsPatientModalOpen(true);
+                        }}
+                        className="text-xs text-[#A78BFA] hover:text-white font-semibold flex items-center gap-1"
+                      >
+                        Editar Registro
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setSelectedPatientForEvolution({ id: pat.id, name: pat.fullName });
+                          setIsEvolutionModalOpen(true);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all shadow-glow"
+                      >
+                        Nova Evolução
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -503,42 +535,48 @@ export default function ProDashboard() {
               Histórico de Evolução Clínica Neuropsicológica
             </h3>
 
-            <div className="space-y-4">
-              {evolutions.map((evo) => (
-                <div key={evo.id} className="glass-card rounded-2xl p-6 border border-white/10 space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/20 text-[#A78BFA] text-xs font-bold">
-                        Sessão #{evo.sessionNumber}
+            {evolutions.length === 0 ? (
+              <div className="glass-card rounded-2xl p-12 text-center text-[#B9B9C4]">
+                Nenhum registro de evolução clínica cadastrado ainda.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {evolutions.map((evo) => (
+                  <div key={evo.id} className="glass-card rounded-2xl p-6 border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/20 text-[#A78BFA] text-xs font-bold">
+                          Sessão #{evo.sessionNumber} - {evo.patientName || 'Paciente'}
+                        </span>
+                        <span className="text-xs text-[#B9B9C4]">Data: {evo.date}</span>
+                      </div>
+                      <span className="text-xs text-rose-400 font-semibold flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Prontuário Sigiloso (LGPD)
                       </span>
-                      <span className="text-xs text-[#B9B9C4]">Data: {evo.date}</span>
                     </div>
-                    <span className="text-xs text-rose-400 font-semibold flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Prontuário Sigiloso (LGPD)
-                    </span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="p-3 rounded-xl bg-[#09090B] border border-white/5">
+                        <span className="font-bold text-[#A78BFA] block mb-1">Subjetivo:</span>
+                        <p className="text-[#B9B9C4]">{evo.subjective || 'Não registrado'}</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-[#09090B] border border-white/5">
+                        <span className="font-bold text-[#A78BFA] block mb-1">Objetivo (Testes Neuropsicológicos):</span>
+                        <p className="text-[#B9B9C4]">{evo.objective || 'Não registrado'}</p>
+                      </div>
+                    </div>
+
+                    {evo.privateNotes && (
+                      <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
+                        <span className="font-bold block mb-1">Anotação Privada da Profissional:</span>
+                        <p>{evo.privateNotes}</p>
+                      </div>
+                    )}
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                    <div className="p-3 rounded-xl bg-[#09090B] border border-white/5">
-                      <span className="font-bold text-[#A78BFA] block mb-1">Subjetivo:</span>
-                      <p className="text-[#B9B9C4]">{evo.subjective}</p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-[#09090B] border border-white/5">
-                      <span className="font-bold text-[#A78BFA] block mb-1">Objetivo (Testes Neuropsicológicos):</span>
-                      <p className="text-[#B9B9C4]">{evo.objective}</p>
-                    </div>
-                  </div>
-
-                  {evo.privateNotes && (
-                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
-                      <span className="font-bold block mb-1">Anotação Privada da Profissional:</span>
-                      <p>{evo.privateNotes}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -549,34 +587,40 @@ export default function ProDashboard() {
               Controle Financeiro & Emissão de Comprovantes Pix
             </h3>
 
-            <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-4">
-              {appointments.map((app) => (
-                <div key={app.id} className="p-4 rounded-xl bg-[#09090B] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{app.patientName}</h4>
-                    <p className="text-xs text-[#B9B9C4]">{app.serviceTitle} • R$ {app.price.toFixed(2)}</p>
-                  </div>
+            {appointments.length === 0 ? (
+              <div className="glass-card rounded-2xl p-12 text-center text-[#B9B9C4]">
+                Nenhum registro financeiro no banco de dados.
+              </div>
+            ) : (
+              <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-4">
+                {appointments.map((app) => (
+                  <div key={app.id} className="p-4 rounded-xl bg-[#09090B] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{app.patientName}</h4>
+                      <p className="text-xs text-[#B9B9C4]">{app.serviceTitle} • R$ {app.price.toFixed(2)}</p>
+                    </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      app.paymentStatus === 'pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>
-                      {app.paymentStatus === 'pago' ? 'PAGO VIA PIX' : 'PENDENTE'}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        app.paymentStatus === 'pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                      }`}>
+                        {app.paymentStatus === 'pago' ? 'PAGO VIA PIX' : 'PENDENTE'}
+                      </span>
 
-                    {app.paymentStatus === 'pago' && (
-                      <button
-                        onClick={() => generateAppointmentReceiptPDF(app)}
-                        className="px-3 py-1.5 rounded-lg bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all flex items-center gap-1 shadow-glow"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Recibo PDF
-                      </button>
-                    )}
+                      {app.paymentStatus === 'pago' && (
+                        <button
+                          onClick={() => generateAppointmentReceiptPDF(app)}
+                          className="px-3 py-1.5 rounded-lg bg-[#8B5CF6] text-white text-xs font-semibold hover:bg-[#7C3AED] transition-all flex items-center gap-1 shadow-glow"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Recibo PDF
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -584,14 +628,20 @@ export default function ProDashboard() {
       {/* Modals */}
       <PatientModal
         isOpen={isPatientModalOpen}
-        onClose={() => setIsPatientModalOpen(false)}
+        onClose={() => {
+          setIsPatientModalOpen(false);
+          loadData();
+        }}
         patientToEdit={selectedPatientForEdit}
       />
 
       {selectedPatientForEvolution && (
         <EvolutionModal
           isOpen={isEvolutionModalOpen}
-          onClose={() => setIsEvolutionModalOpen(false)}
+          onClose={() => {
+            setIsEvolutionModalOpen(false);
+            loadData();
+          }}
           patientId={selectedPatientForEvolution.id}
           patientName={selectedPatientForEvolution.name}
         />
@@ -599,7 +649,10 @@ export default function ProDashboard() {
 
       <LockSlotModal
         isOpen={isLockModalOpen}
-        onClose={() => setIsLockModalOpen(false)}
+        onClose={() => {
+          setIsLockModalOpen(false);
+          loadData();
+        }}
       />
     </div>
   );

@@ -1,0 +1,143 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("CLIENTE") // CLIENTE, PROFISSIONAL, ADMIN
+  phone        String?
+  cpf          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient      Patient?
+}
+
+model Patient {
+  id                   String        @id @default(uuid())
+  userId               String?       @unique
+  fullName             String
+  socialName           String?
+  email                String?
+  phone                String
+  cpf                  String?
+  birthDate            String?
+  occupation           String?
+  emergencyContact     String?
+  clinicalNotesSummary String?
+  status               String        @default("em_avaliacao") // ativo, em_avaliacao, alta, inativo
+  isDeleted            Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  user                 User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appointments         Appointment[]
+  sessionEvolutions    SessionEvolution[]
+  payments             Payment[]
+}
+
+model Service {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  durationMinutes Int
+  price           Float
+  modality        String   @default("presencial")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  appointments    Appointment[]
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String?
+  patientName     String
+  patientEmail    String?
+  patientPhone    String
+  serviceId       String?
+  serviceTitle    String
+  date            String
+  time            String
+  durationMinutes Int               @default(50)
+  modality        String            @default("presencial")
+  status          String            @default("agendado") // agendado, concluido, cancelado, remarcado
+  price           Float
+  paymentStatus   String            @default("pendente") // pago, pendente, estornado
+  paymentMethod   String?           @default("pix")
+  pixCode         String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  patient         Patient?          @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  service         Service?          @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  payments        Payment[]
+  sessionEvolutions SessionEvolution[]
+}
+
+model SessionEvolution {
+  id            String   @id @default(uuid())
+  patientId     String
+  appointmentId String?
+  date          String
+  sessionNumber Int
+  subjective    String?
+  objective     String?
+  assessment    String?
+  plan          String?
+  privateNotes  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  patient       Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  appointmentId String?
+  patientId     String?
+  patientName   String
+  serviceTitle  String
+  amount        Float
+  date          String
+  method        String        @default("pix")
+  status        String        @default("pendente") // pago, pendente, estornado
+  txId          String?
+  receiptIssued Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patient       Patient?      @relation(fields: [patientId], references: [id], onDelete: SetNull)
+}
+
+model AvailabilitySlot {
+  id          String   @id @default(uuid())
+  date        String
+  time        String
+  isAvailable Boolean  @default(true)
+  reason      String?
+  createdAt   DateTime @default(now())
+}
+
+model ClinicSetting {
+  id        String   @id @default("default")
+  proName   String   @default("Dra. Cleo Pai")
+  crp       String   @default("CRP 06/189234")
+  email     String   @default("contato@neuropsicologia.com.br")
+  phone     String   @default("(11) 99999-8888")
+  address   String   @default("Av. Paulista, 2000 - Bela Vista, São Paulo - SP")
+  pixKey    String   @default("08836672663")
+  updatedAt DateTime @updatedAt
+}
