@@ -48,32 +48,6 @@ Plataforma Web completa, moderna e sofisticada para clínica de Neuropsicologia 
 
 ---
 
-## 🚀 Como Executar o Projeto Localmente
-
-### Pré-requisitos
-- **Node.js**: v18.0 ou superior
-- **npm** ou **yarn** / **pnpm**
-
-### Passo a Passo
-
-```bash
-# 1. Clonar o repositório no GitHub
-git clone https://github.com/GuiPaicheco/PsiCleoPai.git
-
-# 2. Entrar no diretório do projeto
-cd PsiCleoPai
-
-# 3. Instalar as dependências
-npm install
-
-# 4. Iniciar o servidor de desenvolvimento
-npm run dev
-```
-
-Acesse `http://localhost:3000` no seu navegador.
-
----
-
 ## 🛠️ Stack Tecnológica
 
 - **Framework**: Next.js 14 (App Router)
