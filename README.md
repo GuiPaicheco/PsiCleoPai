@@ -72,3 +72,36 @@ O sistema segue as diretrizes do **Código de Ética do Psicólogo** e as regula
 ## 📌 Repositório GitHub
 
 - **URL**: [https://github.com/GuiPaicheco/PsiCleoPai.git](https://github.com/GuiPaicheco/PsiCleoPai.git)
+
+---
+
+## Guia rápido do repositório
+
+Plataforma em Next.js para apresentação profissional, área do cliente e gestão de atendimento em psicologia.
+
+**Contexto:** Projeto clínico.
+
+### Ambiente de desenvolvimento
+
+Requer Node.js e npm. Instale as dependências e inicie o ambiente de desenvolvimento:
+
+```bash
+git clone https://github.com/GuiPaicheco/PsiCleoPai.git
+cd PsiCleoPai
+npm install
+npm run dev
+```
+
+Consulte o endereço informado pelo servidor no terminal.
+
+| Script | Comando configurado |
+| --- | --- |
+| `npm run dev` | `next dev` |
+| `npm run build` | `prisma generate && next build` |
+| `npm run postinstall` | `prisma generate` |
+| `npm run start` | `next start` |
+| `npm run lint` | `next lint` |
+
+Se o projeto usar serviços externos, configure suas próprias variáveis de ambiente antes de executar os fluxos integrados. A instalação das dependências não configura banco, autenticação ou serviços remotos.
+
+Consulte os requisitos e as limitações nas seções acima antes de usar o sistema. Esta atualização revisa a documentação; não representa uma nova validação de execução ou de segurança.
